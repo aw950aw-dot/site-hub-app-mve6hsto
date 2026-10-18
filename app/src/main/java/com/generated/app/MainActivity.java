@@ -24,7 +24,6 @@ import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -67,10 +66,18 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Start background service to keep app active and running in background
+        Intent serviceIntent = new Intent(this, BrowserBackgroundService.class);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+
         // Initialize sites list matching the user request
         initializeSites();
 
-        // Build UI programmatically to ensure robust single-file delivery without XML bloat
+        // Build UI programmatically ensuring full viewport display without clipping
         buildUI();
 
         // Handle incoming Intent (e.g. user clicked external link targeting this app)
@@ -90,19 +97,12 @@ public class MainActivity extends Activity {
     }
 
     private void initializeSites() {
-        // 1. מתמחים טופ (Using Google search or standard Forum search URL as placeholder/actual entry)
         sites.add(new SiteItem("מתמחים טופ", "https://mitmachim.top/"));
-        // 2. OgenPlay
         sites.add(new SiteItem("OgenPlay", "https://ogenplay.com/"));
-        // 3. App Factory
         sites.add(new SiteItem("App Factory", "https://app-factory-nt5l.onrender.com/"));
-        // 4. GitHub
         sites.add(new SiteItem("GitHub", "https://github.com/"));
-        // 5. JTech Forums
         sites.add(new SiteItem("JTech Forums", "https://jtechforums.org"));
-        // 6. Nigun Pages
         sites.add(new SiteItem("Nigun Pages", "https://nigun.pages.dev"));
-        // 7. Google Chrome Search Page
         sites.add(new SiteItem("חיפוש Google", "https://www.google.com"));
     }
 
@@ -126,7 +126,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Top Bar (Search, Tabs, Controls) - hides on scroll down
+        // Top Bar (Search, Tabs, Controls)
         topBarLayout = new LinearLayout(this);
         topBarLayout.setOrientation(LinearLayout.VERTICAL);
         topBarLayout.setBackgroundColor(0xFFFFFFFF);
@@ -196,7 +196,7 @@ public class MainActivity extends Activity {
         progressBar.setProgressDrawable(getResources().getDrawable(android.R.drawable.progress_horizontal));
         topBarLayout.addView(progressBar);
 
-        // 2. Horizontal Tabs Bar (keeps all sites persistent in memory)
+        // 2. Horizontal Tabs Bar
         tabsScroll = new HorizontalScrollView(this);
         tabsScroll.setHorizontalScrollBarEnabled(false);
         tabsScroll.setPadding(16, 8, 16, 12);
@@ -221,7 +221,7 @@ public class MainActivity extends Activity {
         // Build Home Dashboard View
         buildHomeDashboard();
 
-        // Build WebViews for all sites (Background pre-creation ensures sessions/cookies persist and sites don't restart when switching)
+        // Build WebViews for all sites
         for (int i = 0; i < sites.size(); i++) {
             createWebViewForSite(i);
         }
@@ -246,7 +246,6 @@ public class MainActivity extends Activity {
         title.setPadding(0, 16, 0, 32);
         homeLayout.addView(title);
 
-        // Grid container for sites cards
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
 
@@ -322,7 +321,6 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        // Enable Cookie persistence across sessions so logins are remembered
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
@@ -377,7 +375,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Long click listener on links to copy URL as requested
+        // Long click listener on links to copy URL
         wv.setOnLongClickListener(v -> {
             WebView.HitTestResult result = wv.getHitTestResult();
             if (result != null && (result.getType() == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
@@ -394,7 +392,7 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        // Touch listener for auto-hiding top bar on downward scroll
+        // Touch listener for auto-hiding top bar on downward scroll and restoring fully when scrolling up to top
         wv.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -403,19 +401,22 @@ public class MainActivity extends Activity {
                 case MotionEvent.ACTION_MOVE:
                     float currentY = event.getY();
                     float deltaY = currentY - lastTouchY;
-                    if (deltaY < -40 && !isTopBarHidden) {
-                        // Scrolling Down -> hide top bar
+                    if (deltaY < -25 && !isTopBarHidden) {
+                        // Scrolling Down -> hide top bar smoothly
                         hideTopBar();
-                    } else if (deltaY > 40 && isTopBarHidden) {
-                        // Scrolling Up -> show top bar
+                    } else if (deltaY > 25 && isTopBarHidden) {
+                        // Scrolling Up -> show top bar fully
                         showTopBar();
                     }
                     break;
             }
+            // If scrolled all the way to the top of the web page, always ensure top bar is fully visible
+            if (wv.getScrollY() == 0 && isTopBarHidden) {
+                showTopBar();
+            }
             return false;
         });
 
-        // Add to container (hidden initially)
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
@@ -468,12 +469,10 @@ public class MainActivity extends Activity {
     private void updateTabsUI() {
         tabsContainer.removeAllViews();
 
-        // Add Home Tab indicator
         TextView homeTab = createTabButton("🏠 " + getString(R.string.menu_home), currentSiteIndex == -1);
         homeTab.setOnClickListener(v -> showHomeDashboard());
         tabsContainer.addView(homeTab);
 
-        // Add Site Tabs
         for (int i = 0; i < sites.size(); i++) {
             final int index = i;
             SiteItem site = sites.get(i);
@@ -522,14 +521,12 @@ public class MainActivity extends Activity {
         if (currentSiteIndex >= 0 && currentSiteIndex < sites.size()) {
             sites.get(currentSiteIndex).webView.loadUrl(url);
         } else {
-            // If on home, open in the first site tab (or create/switch to Google/default)
-            switchToSite(6); // Google search site index is 6
+            switchToSite(6);
             sites.get(6).webView.loadUrl(url);
         }
     }
 
     private void openUrlInActiveTab(String url) {
-        // Find if url matches any existing site
         for (int i = 0; i < sites.size(); i++) {
             if (url.contains(Uri.parse(sites.get(i).url).getHost())) {
                 switchToSite(i);
@@ -537,7 +534,6 @@ public class MainActivity extends Activity {
                 return;
             }
         }
-        // Otherwise open in current tab or first tab
         int target = currentSiteIndex >= 0 ? currentSiteIndex : 0;
         switchToSite(target);
         sites.get(target).webView.loadUrl(url);
@@ -546,14 +542,14 @@ public class MainActivity extends Activity {
     private void hideTopBar() {
         if (!isTopBarHidden) {
             isTopBarHidden = true;
-            topBarLayout.animate().translationY(-topBarLayout.getHeight()).setDuration(250).start();
+            topBarLayout.animate().translationY(-topBarLayout.getHeight()).setDuration(200).start();
         }
     }
 
     private void showTopBar() {
         if (isTopBarHidden) {
             isTopBarHidden = false;
-            topBarLayout.animate().translationY(0).setDuration(250).start();
+            topBarLayout.animate().translationY(0).setDuration(200).start();
         }
     }
 

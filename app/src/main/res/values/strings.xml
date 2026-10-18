@@ -7,6 +7,7 @@
     <string name="menu_open_external">פתח בדפדפן חיצוני</string>
     <string name="link_copied">הקישור הועתק ללוח</string>
     <string name="search_hint">חפש בגוגל או הזן כתובת אתר...</string>
+    <string name="background_service_running">הדפדפן פועל ברקע</string>
     
     <!-- Site Titles -->
     <string name="site_metamchim_title">מתמחים טופ</string>
