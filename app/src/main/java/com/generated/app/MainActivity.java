@@ -312,20 +312,22 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
         
-        // Speed optimizations (removed deprecated setAppCacheEnabled for modern SDK compatibility)
+        // Advanced speed optimizations for ultra-fast loading
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        settings.setLoadsImagesAutomatically(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(false);
         }
 
+        // Preload rendering hints
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            cookieManager.setAcceptThirdPartyCookies(wv, true);
-        }
 
         wv.setWebViewClient(new WebViewClient() {
             @Override
