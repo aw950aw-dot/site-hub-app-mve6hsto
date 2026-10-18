@@ -1,0 +1,582 @@
+package com.generated.app;
+
+import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends Activity {
+
+    // Data class representing a tab / site
+    private static class SiteItem {
+        String title;
+        String url;
+        WebView webView;
+        boolean isLoaded = false;
+
+        SiteItem(String title, String url) {
+            this.title = title;
+            this.url = url;
+        }
+    }
+
+    private final List<SiteItem> sites = new ArrayList<>();
+    private int currentSiteIndex = -1; // -1 means Home Dashboard
+
+    private LinearLayout rootLayout;
+    private LinearLayout topBarLayout;
+    private HorizontalScrollView tabsScroll;
+    private LinearLayout tabsContainer;
+    private FrameLayout webContainer;
+    private LinearLayout homeLayout;
+    private ProgressBar progressBar;
+    private EditText searchInput;
+
+    private float lastTouchY = 0;
+    private boolean isTopBarHidden = false;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Initialize sites list matching the user request
+        initializeSites();
+
+        // Build UI programmatically to ensure robust single-file delivery without XML bloat
+        buildUI();
+
+        // Handle incoming Intent (e.g. user clicked external link targeting this app)
+        handleIntent(getIntent());
+
+        // If no intent URL was handled, show home dashboard initially
+        if (currentSiteIndex == -1) {
+            showHomeDashboard();
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntent(intent);
+    }
+
+    private void initializeSites() {
+        // 1. מתמחים טופ (Using Google search or standard Forum search URL as placeholder/actual entry)
+        sites.add(new SiteItem("מתמחים טופ", "https://mitmachim.top/"));
+        // 2. OgenPlay
+        sites.add(new SiteItem("OgenPlay", "https://ogenplay.com/"));
+        // 3. App Factory
+        sites.add(new SiteItem("App Factory", "https://app-factory-nt5l.onrender.com/"));
+        // 4. GitHub
+        sites.add(new SiteItem("GitHub", "https://github.com/"));
+        // 5. JTech Forums
+        sites.add(new SiteItem("JTech Forums", "https://jtechforums.org"));
+        // 6. Nigun Pages
+        sites.add(new SiteItem("Nigun Pages", "https://nigun.pages.dev"));
+        // 7. Google Chrome Search Page
+        sites.add(new SiteItem("חיפוש Google", "https://www.google.com"));
+    }
+
+    private void handleIntent(Intent intent) {
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction())) {
+            Uri data = intent.getData();
+            if (data != null) {
+                String url = data.toString();
+                openUrlInActiveTab(url);
+            }
+        }
+    }
+
+    private void buildUI() {
+        // Root vertical layout (RTL enabled for Hebrew)
+        rootLayout = new LinearLayout(this);
+        rootLayout.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.setBackgroundColor(0xFFF8F9FA);
+        rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // Top Bar (Search, Tabs, Controls) - hides on scroll down
+        topBarLayout = new LinearLayout(this);
+        topBarLayout.setOrientation(LinearLayout.VERTICAL);
+        topBarLayout.setBackgroundColor(0xFFFFFFFF);
+        topBarLayout.setElevation(4f);
+        topBarLayout.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 1. Header / Search row
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        searchRow.setPadding(24, 20, 24, 12);
+
+        // Home button
+        TextView homeBtn = new TextView(this);
+        homeBtn.setText("🏠");
+        homeBtn.setTextSize(20);
+        homeBtn.setPadding(12, 12, 24, 12);
+        homeBtn.setOnClickListener(v -> showHomeDashboard());
+        searchRow.addView(homeBtn);
+
+        // Search/URL Input bar
+        searchInput = new EditText(this);
+        searchInput.setHint(R.string.search_hint);
+        searchInput.setTextSize(15);
+        searchInput.setSingleLine(true);
+        searchInput.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        searchInput.setBackgroundResource(R.drawable.bg_search);
+        searchInput.setPadding(36, 20, 36, 20);
+        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        searchInput.setLayoutParams(searchParams);
+        searchInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                String query = searchInput.getText().toString().trim();
+                if (!query.isEmpty()) {
+                    loadSearchOrUrl(query);
+                }
+                hideKeyboard();
+                return true;
+            }
+            return false;
+        });
+        searchRow.addView(searchInput);
+
+        // Refresh button
+        TextView refreshBtn = new TextView(this);
+        refreshBtn.setText("🔄");
+        refreshBtn.setTextSize(18);
+        refreshBtn.setPadding(24, 12, 12, 12);
+        refreshBtn.setOnClickListener(v -> {
+            if (currentSiteIndex >= 0 && currentSiteIndex < sites.size()) {
+                WebView wv = sites.get(currentSiteIndex).webView;
+                if (wv != null) wv.reload();
+            }
+        });
+        searchRow.addView(refreshBtn);
+
+        topBarLayout.addView(searchRow);
+
+        // Progress bar for page loading
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setMax(100);
+        progressBar.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 6));
+        progressBar.setProgressDrawable(getResources().getDrawable(android.R.drawable.progress_horizontal));
+        topBarLayout.addView(progressBar);
+
+        // 2. Horizontal Tabs Bar (keeps all sites persistent in memory)
+        tabsScroll = new HorizontalScrollView(this);
+        tabsScroll.setHorizontalScrollBarEnabled(false);
+        tabsScroll.setPadding(16, 8, 16, 12);
+        tabsScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        tabsContainer = new LinearLayout(this);
+        tabsContainer.setOrientation(LinearLayout.HORIZONTAL);
+        tabsScroll.addView(tabsContainer);
+
+        topBarLayout.addView(tabsScroll);
+        rootLayout.addView(topBarLayout);
+
+        // 3. Content Area Container (FrameLayout holding Home Dashboard and WebViews)
+        webContainer = new FrameLayout(this);
+        webContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0, 1f));
+        rootLayout.addView(webContainer);
+
+        // Build Home Dashboard View
+        buildHomeDashboard();
+
+        // Build WebViews for all sites (Background pre-creation ensures sessions/cookies persist and sites don't restart when switching)
+        for (int i = 0; i < sites.size(); i++) {
+            createWebViewForSite(i);
+        }
+
+        // Refresh tabs UI
+        updateTabsUI();
+
+        setContentView(rootLayout);
+    }
+
+    private void buildHomeDashboard() {
+        homeLayout = new LinearLayout(this);
+        homeLayout.setOrientation(LinearLayout.VERTICAL);
+        homeLayout.setPadding(32, 32, 32, 32);
+        homeLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        TextView title = new TextView(this);
+        title.setText(R.string.home_title);
+        title.setTextSize(22);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setTextColor(0xFF202124);
+        title.setPadding(0, 16, 0, 32);
+        homeLayout.addView(title);
+
+        // Grid container for sites cards
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+
+        for (int i = 0; i < sites.size(); i++) {
+            final int index = i;
+            SiteItem site = sites.get(i);
+
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setBackgroundResource(R.drawable.bg_card);
+            card.setPadding(28, 24, 28, 24);
+            
+            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            cardParams.setMargins(0, 0, 0, 16);
+            card.setLayoutParams(cardParams);
+
+            TextView iconText = new TextView(this);
+            iconText.setText("🌐");
+            iconText.setTextSize(24);
+            iconText.setPadding(0, 0, 24, 0);
+            card.addView(iconText);
+
+            LinearLayout textLayout = new LinearLayout(this);
+            textLayout.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            textLayout.setLayoutParams(textParams);
+
+            TextView nameView = new TextView(this);
+            nameView.setText(site.title);
+            nameView.setTextSize(18);
+            nameView.setTypeface(null, android.graphics.Typeface.BOLD);
+            nameView.setTextColor(0xFF1976D2);
+            textLayout.addView(nameView);
+
+            TextView urlView = new TextView(this);
+            urlView.setText(site.url);
+            urlView.setTextSize(13);
+            urlView.setTextColor(0xFF5F6368);
+            textLayout.addView(urlView);
+
+            card.addView(textLayout);
+
+            card.setOnClickListener(v -> switchToSite(index));
+            grid.addView(card);
+        }
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        scroll.addView(grid);
+
+        homeLayout.addView(scroll);
+        webContainer.addView(homeLayout);
+    }
+
+    private void createWebViewForSite(final int index) {
+        final SiteItem site = sites.get(index);
+
+        WebView wv = new WebView(this);
+        WebSettings settings = wv.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        // Enable Cookie persistence across sessions so logins are remembered
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(wv, true);
+        }
+
+        wv.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                view.loadUrl(url);
+                return true;
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                view.loadUrl(url);
+                return true;
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (currentSiteIndex == index) {
+                    searchInput.setText(url);
+                }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                site.isLoaded = true;
+                if (currentSiteIndex == index) {
+                    searchInput.setText(url);
+                }
+            }
+        });
+
+        wv.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                if (currentSiteIndex == index) {
+                    if (newProgress == 100) {
+                        progressBar.setVisibility(View.GONE);
+                    } else {
+                        if (progressBar.getVisibility() == View.GONE) {
+                            progressBar.setVisibility(View.VISIBLE);
+                        }
+                        progressBar.setProgress(newProgress);
+                    }
+                }
+            }
+        });
+
+        // Long click listener on links to copy URL as requested
+        wv.setOnLongClickListener(v -> {
+            WebView.HitTestResult result = wv.getHitTestResult();
+            if (result != null && (result.getType() == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
+                    result.getType() == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)) {
+                String linkUrl = result.getExtra();
+                if (linkUrl != null && !linkUrl.isEmpty()) {
+                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("Copied Link", linkUrl);
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(MainActivity.this, R.string.link_copied, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        // Touch listener for auto-hiding top bar on downward scroll
+        wv.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    lastTouchY = event.getY();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    float currentY = event.getY();
+                    float deltaY = currentY - lastTouchY;
+                    if (deltaY < -40 && !isTopBarHidden) {
+                        // Scrolling Down -> hide top bar
+                        hideTopBar();
+                    } else if (deltaY > 40 && isTopBarHidden) {
+                        // Scrolling Up -> show top bar
+                        showTopBar();
+                    }
+                    break;
+            }
+            return false;
+        });
+
+        // Add to container (hidden initially)
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        wv.setLayoutParams(params);
+        wv.setVisibility(View.GONE);
+
+        site.webView = wv;
+        webContainer.addView(wv);
+    }
+
+    private void switchToSite(int index) {
+        if (index < 0 || index >= sites.size()) return;
+
+        currentSiteIndex = index;
+        homeLayout.setVisibility(View.GONE);
+
+        for (int i = 0; i < sites.size(); i++) {
+            WebView wv = sites.get(i).webView;
+            if (wv != null) {
+                if (i == index) {
+                    wv.setVisibility(View.VISIBLE);
+                    if (!sites.get(i).isLoaded) {
+                        wv.loadUrl(sites.get(i).url);
+                    }
+                    searchInput.setText(wv.getUrl() != null ? wv.getUrl() : sites.get(i).url);
+                } else {
+                    wv.setVisibility(View.GONE);
+                }
+            }
+        }
+
+        updateTabsUI();
+        showTopBar();
+    }
+
+    private void showHomeDashboard() {
+        currentSiteIndex = -1;
+        homeLayout.setVisibility(View.VISIBLE);
+        for (int i = 0; i < sites.size(); i++) {
+            if (sites.get(i).webView != null) {
+                sites.get(i).webView.setVisibility(View.GONE);
+            }
+        }
+        searchInput.setText("");
+        progressBar.setVisibility(View.GONE);
+        updateTabsUI();
+        showTopBar();
+    }
+
+    private void updateTabsUI() {
+        tabsContainer.removeAllViews();
+
+        // Add Home Tab indicator
+        TextView homeTab = createTabButton("🏠 " + getString(R.string.menu_home), currentSiteIndex == -1);
+        homeTab.setOnClickListener(v -> showHomeDashboard());
+        tabsContainer.addView(homeTab);
+
+        // Add Site Tabs
+        for (int i = 0; i < sites.size(); i++) {
+            final int index = i;
+            SiteItem site = sites.get(i);
+            TextView tab = createTabButton(site.title, currentSiteIndex == index);
+            tab.setOnClickListener(v -> switchToSite(index));
+            tabsContainer.addView(tab);
+        }
+    }
+
+    private TextView createTabButton(String title, boolean isSelected) {
+        TextView tab = new TextView(this);
+        tab.setText(title);
+        tab.setTextSize(14);
+        tab.setSingleLine(true);
+        tab.setPadding(32, 16, 32, 16);
+        tab.setGravity(Gravity.CENTER);
+        
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 16, 0);
+        tab.setLayoutParams(params);
+
+        if (isSelected) {
+            tab.setBackgroundResource(R.drawable.bg_tab_selected);
+            tab.setTextColor(0xFF1976D2);
+            tab.setTypeface(null, android.graphics.Typeface.BOLD);
+        } else {
+            tab.setBackgroundResource(R.drawable.bg_tab_unselected);
+            tab.setTextColor(0xFF4A4A4A);
+            tab.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        return tab;
+    }
+
+    private void loadSearchOrUrl(String query) {
+        String url;
+        if (query.startsWith("http://") || query.startsWith("https://")) {
+            url = query;
+        } else if (query.contains(".") && !query.contains(" ")) {
+            url = "https://" + query;
+        } else {
+            url = "https://www.google.com/search?q=" + Uri.encode(query);
+        }
+
+        if (currentSiteIndex >= 0 && currentSiteIndex < sites.size()) {
+            sites.get(currentSiteIndex).webView.loadUrl(url);
+        } else {
+            // If on home, open in the first site tab (or create/switch to Google/default)
+            switchToSite(6); // Google search site index is 6
+            sites.get(6).webView.loadUrl(url);
+        }
+    }
+
+    private void openUrlInActiveTab(String url) {
+        // Find if url matches any existing site
+        for (int i = 0; i < sites.size(); i++) {
+            if (url.contains(Uri.parse(sites.get(i).url).getHost())) {
+                switchToSite(i);
+                sites.get(i).webView.loadUrl(url);
+                return;
+            }
+        }
+        // Otherwise open in current tab or first tab
+        int target = currentSiteIndex >= 0 ? currentSiteIndex : 0;
+        switchToSite(target);
+        sites.get(target).webView.loadUrl(url);
+    }
+
+    private void hideTopBar() {
+        if (!isTopBarHidden) {
+            isTopBarHidden = true;
+            topBarLayout.animate().translationY(-topBarLayout.getHeight()).setDuration(250).start();
+        }
+    }
+
+    private void showTopBar() {
+        if (isTopBarHidden) {
+            isTopBarHidden = false;
+            topBarLayout.animate().translationY(0).setDuration(250).start();
+        }
+    }
+
+    private void hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null && getCurrentFocus() != null) {
+            imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (currentSiteIndex >= 0 && currentSiteIndex < sites.size()) {
+            WebView wv = sites.get(currentSiteIndex).webView;
+            if (wv != null && wv.canGoBack()) {
+                wv.goBack();
+                return;
+            }
+        }
+        if (currentSiteIndex != -1) {
+            showHomeDashboard();
+            return;
+        }
+        super.onBackPressed();
+    }
+}

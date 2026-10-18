@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">פורטל אתרים</string>
+    <string name="home_title">פורטל אתרים מועדפים</string>
+    <string name="menu_home">דף הבית</string>
+    <string name="menu_refresh">רענן</string>
+    <string name="menu_copy_link">העתק קישור</string>
+    <string name="menu_open_external">פתח בדפדפן חיצוני</string>
+    <string name="link_copied">הקישור הועתק ללוח</string>
+    <string name="search_hint">חפש בגוגל או הזן כתובת אתר...</string>
+    
+    <!-- Site Titles -->
+    <string name="site_metamchim_title">מתמחים טופ</string>
+    <string name="site_ogenplay_title">OgenPlay</string>
+    <string name="site_appfactory_title">App Factory</string>
+    <string name="site_github_title">GitHub</string>
+    <string name="site_jtech_title">JTech Forums</string>
+    <string name="site_nigun_title">Nigun Pages</string>
+    <string name="site_google_title">חיפוש Google</string>
+</resources>
