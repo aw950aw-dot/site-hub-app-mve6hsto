@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -34,7 +35,6 @@ import java.util.List;
 
 public class MainActivity extends Activity {
 
-    // Data class representing a tab / site
     private static class SiteItem {
         String title;
         String url;
@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
     }
 
     private final List<SiteItem> sites = new ArrayList<>();
-    private int currentSiteIndex = -1; // -1 means Home Dashboard
+    private int currentSiteIndex = -1;
 
     private LinearLayout rootLayout;
     private LinearLayout topBarLayout;
@@ -66,24 +66,21 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Start background service to keep app active and running in background
-        Intent serviceIntent = new Intent(this, BrowserBackgroundService.class);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
+        try {
+            Intent serviceIntent = new Intent(this, BrowserBackgroundService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
-        // Initialize sites list matching the user request
         initializeSites();
-
-        // Build UI programmatically ensuring full viewport display without clipping
         buildUI();
-
-        // Handle incoming Intent (e.g. user clicked external link targeting this app)
         handleIntent(getIntent());
 
-        // If no intent URL was handled, show home dashboard initially
         if (currentSiteIndex == -1) {
             showHomeDashboard();
         }
@@ -117,7 +114,6 @@ public class MainActivity extends Activity {
     }
 
     private void buildUI() {
-        // Root vertical layout (RTL enabled for Hebrew)
         rootLayout = new LinearLayout(this);
         rootLayout.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
@@ -126,22 +122,21 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Top Bar (Search, Tabs, Controls)
         topBarLayout = new LinearLayout(this);
         topBarLayout.setOrientation(LinearLayout.VERTICAL);
         topBarLayout.setBackgroundColor(0xFFFFFFFF);
-        topBarLayout.setElevation(4f);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            topBarLayout.setElevation(4f);
+        }
         topBarLayout.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // 1. Header / Search row
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
         searchRow.setGravity(Gravity.CENTER_VERTICAL);
         searchRow.setPadding(24, 20, 24, 12);
 
-        // Home button
         TextView homeBtn = new TextView(this);
         homeBtn.setText("🏠");
         homeBtn.setTextSize(20);
@@ -149,7 +144,6 @@ public class MainActivity extends Activity {
         homeBtn.setOnClickListener(v -> showHomeDashboard());
         searchRow.addView(homeBtn);
 
-        // Search/URL Input bar
         searchInput = new EditText(this);
         searchInput.setHint(R.string.search_hint);
         searchInput.setTextSize(15);
@@ -173,7 +167,6 @@ public class MainActivity extends Activity {
         });
         searchRow.addView(searchInput);
 
-        // Refresh button
         TextView refreshBtn = new TextView(this);
         refreshBtn.setText("🔄");
         refreshBtn.setTextSize(18);
@@ -188,15 +181,12 @@ public class MainActivity extends Activity {
 
         topBarLayout.addView(searchRow);
 
-        // Progress bar for page loading
         progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progressBar.setMax(100);
         progressBar.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 6));
-        progressBar.setProgressDrawable(getResources().getDrawable(android.R.drawable.progress_horizontal));
         topBarLayout.addView(progressBar);
 
-        // 2. Horizontal Tabs Bar
         tabsScroll = new HorizontalScrollView(this);
         tabsScroll.setHorizontalScrollBarEnabled(false);
         tabsScroll.setPadding(16, 8, 16, 12);
@@ -211,22 +201,18 @@ public class MainActivity extends Activity {
         topBarLayout.addView(tabsScroll);
         rootLayout.addView(topBarLayout);
 
-        // 3. Content Area Container (FrameLayout holding Home Dashboard and WebViews)
         webContainer = new FrameLayout(this);
         webContainer.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0, 1f));
         rootLayout.addView(webContainer);
 
-        // Build Home Dashboard View
         buildHomeDashboard();
 
-        // Build WebViews for all sites
         for (int i = 0; i < sites.size(); i++) {
             createWebViewForSite(i);
         }
 
-        // Refresh tabs UI
         updateTabsUI();
 
         setContentView(rootLayout);
@@ -323,16 +309,19 @@ public class MainActivity extends Activity {
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(wv, true);
         }
 
         wv.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String url = request.getUrl().toString();
-                view.loadUrl(url);
-                return true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    String url = request.getUrl().toString();
+                    view.loadUrl(url);
+                    return true;
+                }
+                return false;
             }
 
             @Override
@@ -344,7 +333,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                if (currentSiteIndex == index) {
+                if (currentSiteIndex == index && searchInput != null) {
                     searchInput.setText(url);
                 }
             }
@@ -353,7 +342,7 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 site.isLoaded = true;
-                if (currentSiteIndex == index) {
+                if (currentSiteIndex == index && searchInput != null) {
                     searchInput.setText(url);
                 }
             }
@@ -362,7 +351,7 @@ public class MainActivity extends Activity {
         wv.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
-                if (currentSiteIndex == index) {
+                if (currentSiteIndex == index && progressBar != null) {
                     if (newProgress == 100) {
                         progressBar.setVisibility(View.GONE);
                     } else {
@@ -375,7 +364,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Long click listener on links to copy URL
         wv.setOnLongClickListener(v -> {
             WebView.HitTestResult result = wv.getHitTestResult();
             if (result != null && (result.getType() == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
@@ -383,16 +371,17 @@ public class MainActivity extends Activity {
                 String linkUrl = result.getExtra();
                 if (linkUrl != null && !linkUrl.isEmpty()) {
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    ClipData clip = ClipData.newPlainText("Copied Link", linkUrl);
-                    clipboard.setPrimaryClip(clip);
-                    Toast.makeText(MainActivity.this, R.string.link_copied, Toast.LENGTH_SHORT).show();
-                    return true;
+                    if (clipboard != null) {
+                        ClipData clip = ClipData.newPlainText("Copied Link", linkUrl);
+                        clipboard.setPrimaryClip(clip);
+                        Toast.makeText(MainActivity.this, R.string.link_copied, Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
                 }
             }
             return false;
         });
 
-        // Touch listener for auto-hiding top bar on downward scroll and restoring fully when scrolling up to top
         wv.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -402,15 +391,12 @@ public class MainActivity extends Activity {
                     float currentY = event.getY();
                     float deltaY = currentY - lastTouchY;
                     if (deltaY < -25 && !isTopBarHidden) {
-                        // Scrolling Down -> hide top bar smoothly
                         hideTopBar();
                     } else if (deltaY > 25 && isTopBarHidden) {
-                        // Scrolling Up -> show top bar fully
                         showTopBar();
                     }
                     break;
             }
-            // If scrolled all the way to the top of the web page, always ensure top bar is fully visible
             if (wv.getScrollY() == 0 && isTopBarHidden) {
                 showTopBar();
             }
@@ -431,7 +417,9 @@ public class MainActivity extends Activity {
         if (index < 0 || index >= sites.size()) return;
 
         currentSiteIndex = index;
-        homeLayout.setVisibility(View.GONE);
+        if (homeLayout != null) {
+            homeLayout.setVisibility(View.GONE);
+        }
 
         for (int i = 0; i < sites.size(); i++) {
             WebView wv = sites.get(i).webView;
@@ -441,7 +429,9 @@ public class MainActivity extends Activity {
                     if (!sites.get(i).isLoaded) {
                         wv.loadUrl(sites.get(i).url);
                     }
-                    searchInput.setText(wv.getUrl() != null ? wv.getUrl() : sites.get(i).url);
+                    if (searchInput != null) {
+                        searchInput.setText(wv.getUrl() != null ? wv.getUrl() : sites.get(i).url);
+                    }
                 } else {
                     wv.setVisibility(View.GONE);
                 }
@@ -454,19 +444,26 @@ public class MainActivity extends Activity {
 
     private void showHomeDashboard() {
         currentSiteIndex = -1;
-        homeLayout.setVisibility(View.VISIBLE);
+        if (homeLayout != null) {
+            homeLayout.setVisibility(View.VISIBLE);
+        }
         for (int i = 0; i < sites.size(); i++) {
             if (sites.get(i).webView != null) {
                 sites.get(i).webView.setVisibility(View.GONE);
             }
         }
-        searchInput.setText("");
-        progressBar.setVisibility(View.GONE);
+        if (searchInput != null) {
+            searchInput.setText("");
+        }
+        if (progressBar != null) {
+            progressBar.setVisibility(View.GONE);
+        }
         updateTabsUI();
         showTopBar();
     }
 
     private void updateTabsUI() {
+        if (tabsContainer == null) return;
         tabsContainer.removeAllViews();
 
         TextView homeTab = createTabButton("🏠 " + getString(R.string.menu_home), currentSiteIndex == -1);
@@ -540,14 +537,14 @@ public class MainActivity extends Activity {
     }
 
     private void hideTopBar() {
-        if (!isTopBarHidden) {
+        if (!isTopBarHidden && topBarLayout != null) {
             isTopBarHidden = true;
             topBarLayout.animate().translationY(-topBarLayout.getHeight()).setDuration(200).start();
         }
     }
 
     private void showTopBar() {
-        if (isTopBarHidden) {
+        if (isTopBarHidden && topBarLayout != null) {
             isTopBarHidden = false;
             topBarLayout.animate().translationY(0).setDuration(200).start();
         }
