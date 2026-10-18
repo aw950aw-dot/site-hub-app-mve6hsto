@@ -61,6 +61,7 @@ public class MainActivity extends Activity {
 
     private float lastTouchY = 0;
     private boolean isTopBarHidden = false;
+    private int topBarHeight = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -216,6 +217,9 @@ public class MainActivity extends Activity {
         updateTabsUI();
 
         setContentView(rootLayout);
+
+        // Measure top bar after layout for smooth full-screen hide/show animation
+        topBarLayout.post(() -> topBarHeight = topBarLayout.getHeight());
     }
 
     private void buildHomeDashboard() {
@@ -297,6 +301,8 @@ public class MainActivity extends Activity {
 
         WebView wv = new WebView(this);
         WebSettings settings = wv.getSettings();
+        
+        // High-performance settings for blazing fast loading
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
@@ -305,7 +311,17 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        
+        // Speed optimizations
+        settings.setAppCacheEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            settings.setSafeBrowsingEnabled(false);
+        }
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -382,6 +398,7 @@ public class MainActivity extends Activity {
             return false;
         });
 
+        // Sophisticated scroll detection for hiding/showing top bar for true fullscreen immersion
         wv.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -390,14 +407,14 @@ public class MainActivity extends Activity {
                 case MotionEvent.ACTION_MOVE:
                     float currentY = event.getY();
                     float deltaY = currentY - lastTouchY;
-                    if (deltaY < -25 && !isTopBarHidden) {
+                    if (deltaY < -15 && !isTopBarHidden) {
                         hideTopBar();
-                    } else if (deltaY > 25 && isTopBarHidden) {
+                    } else if (deltaY > 15 && isTopBarHidden) {
                         showTopBar();
                     }
                     break;
             }
-            if (wv.getScrollY() == 0 && isTopBarHidden) {
+            if (wv.getScrollY() <= 10 && isTopBarHidden) {
                 showTopBar();
             }
             return false;
@@ -539,14 +556,18 @@ public class MainActivity extends Activity {
     private void hideTopBar() {
         if (!isTopBarHidden && topBarLayout != null) {
             isTopBarHidden = true;
-            topBarLayout.animate().translationY(-topBarLayout.getHeight()).setDuration(200).start();
+            if (topBarHeight == 0) {
+                topBarHeight = topBarLayout.getHeight();
+            }
+            int h = topBarHeight > 0 ? topBarHeight : 200;
+            topBarLayout.animate().translationY(-h).setDuration(250).start();
         }
     }
 
     private void showTopBar() {
         if (isTopBarHidden && topBarLayout != null) {
             isTopBarHidden = false;
-            topBarLayout.animate().translationY(0).setDuration(200).start();
+            topBarLayout.animate().translationY(0).setDuration(250).start();
         }
     }
 
